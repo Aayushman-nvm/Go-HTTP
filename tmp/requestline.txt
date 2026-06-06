@@ -1,0 +1,6 @@
+TCP server listening on :42069
+Client connected: [::1]:54236
+Request Line:
+- Method: GET
+- Target: /prime/agen
+- Version: 1.1

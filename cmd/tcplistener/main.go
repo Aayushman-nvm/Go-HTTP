@@ -2,53 +2,11 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net"
-	"strings"
+
+	"github.com/Aayushman-nvm/Go-HTTP.git/internal/request"
 )
-
-func getLinesChannel(f io.ReadCloser) <-chan string {
-
-	out := make(chan string, 1)
-
-	go func() {
-		defer f.Close()
-		defer close(out)
-
-		str := ""
-		data := make([]byte, 8)
-
-		for {
-
-			count, err := f.Read(data)
-
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				log.Fatal("Padh nahi pa raha bhai: ", err)
-			}
-
-			str += string(data[:count])
-
-			for {
-				i := strings.IndexByte(str, '\n')
-
-				if i == -1 {
-					break
-				}
-				out <- str[:i]
-				str = str[i+1:]
-			}
-		}
-
-		if len(str) != 0 {
-			out <- str
-		}
-	}()
-
-	return out
-}
 
 func main() {
 	listener, err := net.Listen("tcp", ":42069")
@@ -68,10 +26,16 @@ func main() {
 
 		fmt.Println("Client connected:", conn.RemoteAddr())
 
-		for line := range getLinesChannel(conn) {
-			fmt.Println("Line:", line)
+		req, err := request.RequestFromReader(conn)
+
+		if err != nil {
+			log.Fatal("Couldnt send request", req)
 		}
 
+		fmt.Printf("Request Line:\n")
+		fmt.Printf("- Method: %s\n", req.RequestLine.Method)
+		fmt.Printf("- Target: %s\n", req.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %s\n", req.RequestLine.HttpVersion)
 	}
 
 }
