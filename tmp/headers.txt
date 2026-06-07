@@ -1,0 +1,10 @@
+TCP server listening on :42069
+Client connected: [::1]:49832
+Request Line:
+- Method: GET
+- Target: /use-neovim-btw
+- Version: 1.1
+Headers:
+- host: localhost:42069
+- user-agent: curl/8.11.0
+- accept: */*
