@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+
+	"github.com/Aayushman-nvm/Go-HTTP.git/internal/headers"
 )
 
 type Request struct {
 	RequestLine RequestLine
-	Headers     map[string]string
+	Headers     *headers.Headers
 	Body        []byte
 	State       parseState
 }
@@ -22,14 +24,16 @@ type RequestLine struct {
 type parseState string
 
 const (
-	StateInit  parseState = "init"
-	StateDone  parseState = "done"
-	StateError parseState = "error"
+	StateInit    parseState = "init"
+	StateHeaders parseState = "headers"
+	StateDone    parseState = "done"
+	StateError   parseState = "error"
 )
 
 func newRequest() *Request {
 	return &Request{
-		State: StateInit,
+		State:   StateInit,
+		Headers: headers.NewHeaders(),
 	}
 }
 
@@ -77,11 +81,12 @@ func (r *Request) parse(data []byte) (int, error) {
 	read := 0
 outer:
 	for {
+		currentData := data[read:]
 		switch r.State {
 		case StateError:
 			return 0, ERROR_REQUEST_IN_ERROR_STATE
 		case StateInit:
-			reqLine, n, err := parseRequestLine(data[read:])
+			reqLine, n, err := parseRequestLine(currentData)
 			if err != nil {
 				r.State = StateError
 				return 0, err
@@ -93,10 +98,25 @@ outer:
 
 			r.RequestLine = *reqLine
 			read += n
-			r.State = StateDone
+			r.State = StateHeaders
 
+		case StateHeaders:
+			n, done, err := r.Headers.Parse(currentData)
+			if err != nil {
+				r.State = StateError
+				return 0, err
+			}
+			if n == 0 {
+				break outer
+			}
+			read += n
+			if done {
+				r.State = StateDone
+			}
 		case StateDone:
 			break outer
+		default:
+			panic("panic main garbadi kardi")
 		}
 	}
 	return read, nil
@@ -122,7 +142,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 		bufLen += n
 
-		readN, err := request.parse(buf[:bufLen+n])
+		readN, err := request.parse(buf[:bufLen])
 		if err != nil {
 			return nil, err
 		}
