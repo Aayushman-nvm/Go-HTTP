@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/Aayushman-nvm/Go-HTTP.git/internal/headers"
 )
@@ -11,7 +12,7 @@ import (
 type Request struct {
 	RequestLine RequestLine
 	Headers     *headers.Headers
-	Body        []byte
+	Body        string
 	State       parseState
 }
 
@@ -26,20 +27,35 @@ type parseState string
 const (
 	StateInit    parseState = "init"
 	StateHeaders parseState = "headers"
+	StateBody    parseState = "body"
 	StateDone    parseState = "done"
 	StateError   parseState = "error"
 )
+
+func getInt(headers *headers.Headers, name string, defaultValue int) int {
+	valueStr, exists := headers.Get(name)
+	if !exists {
+		return defaultValue
+	}
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return defaultValue
+	}
+	return value
+}
 
 func newRequest() *Request {
 	return &Request{
 		State:   StateInit,
 		Headers: headers.NewHeaders(),
+		Body:    "",
 	}
 }
 
 var ERROR_MALFORMED_REQUEST_LINE = fmt.Errorf("Malformed request line")
 var ERROR_UNSUPPORTED_HTTP_VERSION = fmt.Errorf("Unsupported http version")
 var ERROR_REQUEST_IN_ERROR_STATE = fmt.Errorf("Request in error state")
+var ERROR_UNEXPECTED_EOF = fmt.Errorf("Body shorter than content-length")
 var SEPARATOR = []byte("\r\n")
 
 func parseRequestLine(str []byte) (*RequestLine, int, error) {
@@ -74,6 +90,11 @@ func parseRequestLine(str []byte) (*RequestLine, int, error) {
 
 	return reqLine, read, nil
 
+}
+
+func (r *Request) hasBody() bool {
+	length := getInt(r.Headers, "content-length", 0)
+	return length > 0
 }
 
 func (r *Request) parse(data []byte) (int, error) {
@@ -111,8 +132,33 @@ outer:
 			}
 			read += n
 			if done {
+				if r.hasBody() {
+					r.State = StateBody
+				} else {
+					r.State = StateDone
+				}
+			}
+		case StateBody:
+			length := getInt(r.Headers, "content-length", 0)
+			if length == 0 {
+				panic("chuncked not implemented")
+			}
+
+			if len(currentData) == 0 {
+				break outer
+			}
+
+			remaining := min(length-len(r.Body), len(currentData))
+			if remaining == 0 {
+				break outer
+			}
+			r.Body += string(currentData[:remaining])
+			read += remaining
+
+			if len(r.Body) == length {
 				r.State = StateDone
 			}
+
 		case StateDone:
 			break outer
 		default:
@@ -136,19 +182,30 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	for !request.done() {
 		n, err := reader.Read(buf[bufLen:])
 		//TODO: errors related stuff
-		if err != nil {
-			return nil, err
-		}
 
 		bufLen += n
 
-		readN, err := request.parse(buf[:bufLen])
+		if n > 0 {
+			readN, err := request.parse(buf[:bufLen])
+			if err != nil {
+				return nil, err
+			}
+
+			copy(buf, buf[readN:bufLen])
+			bufLen -= readN
+		}
+
+		if err == io.EOF {
+			if !request.done() {
+				return nil, ERROR_UNEXPECTED_EOF
+			}
+			break
+		}
+
 		if err != nil {
 			return nil, err
 		}
 
-		copy(buf, buf[readN:bufLen])
-		bufLen -= readN
 	}
 
 	return request, nil
