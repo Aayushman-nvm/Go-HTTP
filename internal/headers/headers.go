@@ -64,6 +64,21 @@ func (h *Headers) Replace(name, value string) {
 	h.headers[name] = value
 }
 
+func (h *Headers) Delete(name string) {
+	name = strings.ToLower(name)
+	delete(h.headers, name)
+}
+
+func (h *Headers) Set(name, value string) {
+	name = strings.ToLower(name)
+
+	if v, ok := h.headers[name]; ok {
+		h.headers[name] = fmt.Sprintf("%s,%s", v, value)
+	} else {
+		h.headers[name] = value
+	}
+}
+
 func (h *Headers) ForEach(cb func(n, v string)) {
 	for n, v := range h.headers {
 		cb(n, v)
