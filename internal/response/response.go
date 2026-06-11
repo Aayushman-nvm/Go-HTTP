@@ -19,9 +19,9 @@ const (
 
 func GetDefaultHeaders(contentLen int) *headers.Headers {
 	h := headers.NewHeaders()
-	h.Replace("Content-Length", fmt.Sprintf("%d", contentLen))
-	h.Replace("Connection", "close")
-	h.Replace("Content-Type", "text/plain")
+	h.Set("Content-Length", fmt.Sprintf("%d", contentLen))
+	h.Set("Connection", "close")
+	h.Set("Content-Type", "text/plain")
 
 	return h
 }
