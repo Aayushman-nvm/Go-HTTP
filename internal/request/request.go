@@ -180,6 +180,14 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	bufLen := 0
 
 	for !request.done() {
+		//thats why we dynamically grow it here... amazing stuff
+		if bufLen == len(buf) {
+			newBuf := make([]byte, len(buf)*2)
+			copy(newBuf, buf)
+			buf = newBuf
+		}
+		fmt.Println("bufLen:", bufLen)
+		fmt.Printf("bufLen=%d cap=%d\n", bufLen, len(buf))
 		n, err := reader.Read(buf[bufLen:])
 		//TODO: errors related stuff
 
